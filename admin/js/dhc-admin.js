@@ -222,11 +222,15 @@
 
                 setTimeout(function() { status.text(''); }, 6000);
             } else {
-                status.text(response.data || 'Sync failed.').addClass('error').removeClass('success');
+                var errMsg = response.data || 'Sync failed.';
+                if (errMsg.indexOf('compile') > -1 || errMsg.indexOf('500') > -1) {
+                    errMsg = 'Could not reach the Hub. Please make sure your Hub server is running the latest version and try again.';
+                }
+                status.text(errMsg).addClass('error').removeClass('success');
             }
         }).fail(function() {
             btn.prop('disabled', false).html(originalHtml);
-            status.text('Network error. Please try again.').addClass('error').removeClass('success');
+            status.text('Could not connect to the Hub. Check your internet connection and try again.').addClass('error').removeClass('success');
         });
     });
 

@@ -305,14 +305,14 @@ class DHC_Admin {
                         <p class="dhc-card-desc"><?php esc_html_e( 'This information is used to generate your llms.txt, llms-full.txt, and LocalBusiness schema so AI platforms know your business exists and what services you offer.', 'dsquared-hub-connector' ); ?></p>
                     </div>
                     <div class="dhc-card-body" style="padding-bottom:0;">
-                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;padding:12px 16px;background:#F0F1FA;border-radius:8px;border:1px solid #E0E2F0;">
-                            <span class="dashicons dashicons-download" style="font-size:18px;width:18px;height:18px;color:#5661FF;flex-shrink:0;"></span>
+                        <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;padding:14px 18px;background:#fff;border-radius:10px;border:1px solid #d1d9e6;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+                            <span class="dashicons dashicons-download" style="font-size:20px;width:20px;height:20px;color:#5661FF;flex-shrink:0;"></span>
                             <div style="flex:1;">
-                                <strong style="font-size:13px;color:#131B3A;"><?php esc_html_e( 'Auto-Populate from Hub', 'dsquared-hub-connector' ); ?></strong>
-                                <p style="font-size:12px;color:#64748b;margin:2px 0 0;"><?php esc_html_e( 'Pull your business profile data from your Hub account to pre-fill these fields. You can review and edit before saving.', 'dsquared-hub-connector' ); ?></p>
+                                <strong style="font-size:14px;color:#1a1f36;"><?php esc_html_e( 'Auto-Populate from Hub', 'dsquared-hub-connector' ); ?></strong>
+                                <p style="font-size:13px;color:#64748b;margin:4px 0 0;line-height:1.4;"><?php esc_html_e( 'Pull your business profile data from your Hub account to pre-fill these fields. You can review and edit before saving.', 'dsquared-hub-connector' ); ?></p>
                             </div>
-                            <button type="button" class="dhc-btn dhc-btn-outline" id="dhc-sync-from-hub" style="white-space:nowrap;">
-                                <span class="dashicons dashicons-update" style="font-size:14px;width:14px;height:14px;line-height:14px;"></span>
+                            <button type="button" class="dhc-btn dhc-btn-primary" id="dhc-sync-from-hub" style="white-space:nowrap;padding:10px 20px;font-size:14px;">
+                                <span class="dashicons dashicons-update" style="font-size:15px;width:15px;height:15px;line-height:15px;"></span>
                                 <?php esc_html_e( 'Sync from Hub', 'dsquared-hub-connector' ); ?>
                             </button>
                         </div>
