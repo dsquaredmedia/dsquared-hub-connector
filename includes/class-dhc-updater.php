@@ -287,12 +287,26 @@ class DHC_Updater {
         // Parse version from tag (strip leading 'v' if present)
         $version = ltrim( $release['tag_name'], 'v' );
 
-        // Build the download URL for the ZIP
-        $download_url = $release['zipball_url'] ?? sprintf(
-            'https://github.com/%s/archive/refs/tags/%s.zip',
-            self::GITHUB_REPO,
-            $release['tag_name']
-        );
+        // Prefer the uploaded asset ZIP (has correct folder name: dsquared-hub-connector/)
+        // over GitHub's auto-generated zipball (which uses dsquaredmedia-dsquared-hub-connector-{hash}/)
+        $download_url = '';
+        if ( ! empty( $release['assets'] ) && is_array( $release['assets'] ) ) {
+            foreach ( $release['assets'] as $asset ) {
+                if ( isset( $asset['browser_download_url'] ) && str_ends_with( $asset['name'] ?? '', '.zip' ) ) {
+                    $download_url = $asset['browser_download_url'];
+                    break;
+                }
+            }
+        }
+
+        // Fallback to zipball if no asset found
+        if ( empty( $download_url ) ) {
+            $download_url = $release['zipball_url'] ?? sprintf(
+                'https://github.com/%s/archive/refs/tags/%s.zip',
+                self::GITHUB_REPO,
+                $release['tag_name']
+            );
+        }
 
         return array(
             'version'      => $version,
