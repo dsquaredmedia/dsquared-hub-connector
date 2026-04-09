@@ -578,7 +578,9 @@ class DHC_AI_Discovery {
             }
         }
 
+        // Save to both option names for compatibility
         update_option( 'dhc_business_profile', $profile );
+        update_option( 'dhc_ai_business_profile', $profile );
 
         // Flush rewrite rules so llms.txt works
         flush_rewrite_rules();
@@ -587,6 +589,15 @@ class DHC_AI_Discovery {
         $this->send_indexnow( array( home_url( '/' ) ) );
 
         $this->log_activity( 'Business profile updated via Hub' );
+
+        // v1.6: Log to Hub via centralized event logger
+        if ( class_exists( 'DHC_Event_Logger' ) ) {
+            DHC_Event_Logger::ai_discovery(
+                'profile_updated_via_hub',
+                array( 'source' => 'rest_api', 'fields' => count( $profile ), 'time' => current_time( 'mysql' ) ),
+                'Business profile updated via Hub REST API'
+            );
+        }
 
         return new WP_REST_Response( array(
             'success' => true,
@@ -626,6 +637,13 @@ class DHC_AI_Discovery {
     /* ─── Hub Reporting ─── */
 
     private function report_to_hub( $event, $data ) {
+        // v1.6: Use centralized event logger if available, fallback to direct reporting
+        if ( class_exists( 'DHC_Event_Logger' ) ) {
+            DHC_Event_Logger::ai_discovery( $event, $data );
+            return;
+        }
+
+        // Legacy fallback
         $api_key = get_option( 'dhc_api_key' );
         $sub     = get_option( 'dhc_subscription', array() );
         $hub_url = $sub['hub_url'] ?? 'https://hub.dsquaredmedia.net';

@@ -42,11 +42,20 @@ class DHC_Core {
         // Privacy policy integration
         DHC_Privacy::init();
 
+        // v1.6: Initialize heartbeat system (sends status pings to Hub)
+        DHC_Heartbeat::init();
+
+        // v1.6: Initialize Hub Sync (AJAX handlers for manual sync)
+        DHC_Hub_Sync::init();
+
         // Initialize active modules (only if subscription is valid)
         $this->init_modules();
 
         // Admin notices for subscription status
         add_action( 'admin_notices', array( $this, 'subscription_notices' ) );
+
+        // v1.6: Auto-populate notice
+        add_action( 'admin_notices', array( $this, 'sync_notice' ) );
     }
 
     /**
@@ -131,5 +140,30 @@ class DHC_Core {
             echo '<p><strong>' . esc_html__( 'Dsquared Hub Connector', 'dsquared-hub-connector' ) . '</strong> — ' . esc_html( $subscription['message'] ?? __( 'Unable to validate API key.', 'dsquared-hub-connector' ) ) . '</p>';
             echo '</div>';
         }
+    }
+
+    /**
+     * Show notice when AI Discovery profile was auto-populated from Hub
+     */
+    public function sync_notice() {
+        if ( ! get_transient( 'dhc_show_sync_notice' ) ) {
+            return;
+        }
+
+        $screen = get_current_screen();
+        if ( ! $screen ) {
+            return;
+        }
+
+        echo '<div class="notice notice-success is-dismissible" id="dhc-sync-notice">';
+        echo '<p><strong>' . esc_html__( 'Dsquared Hub Connector', 'dsquared-hub-connector' ) . '</strong> — ';
+        echo esc_html__( 'Your AI Discovery business profile has been auto-populated from your Hub account data. ', 'dsquared-hub-connector' );
+        echo '<a href="' . esc_url( admin_url( 'admin.php?page=dsquared-hub&tab=ai-discovery' ) ) . '">';
+        echo esc_html__( 'Review and edit your profile', 'dsquared-hub-connector' );
+        echo '</a></p>';
+        echo '</div>';
+
+        // Dismiss after showing once
+        delete_transient( 'dhc_show_sync_notice' );
     }
 }

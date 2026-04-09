@@ -276,6 +276,26 @@ class DHC_Content_Decay {
     /* ─── Hub Reporting ─── */
 
     private function report_to_hub( $results ) {
+        // v1.6: Use centralized event logger if available, fallback to direct reporting
+        if ( class_exists( 'DHC_Event_Logger' ) ) {
+            DHC_Event_Logger::content_decay(
+                'content_decay_scan',
+                array(
+                    'summary'    => $results['summary'],
+                    'stale'      => array_slice( $results['stale'], 0, 50 ), // Top 50
+                    'scanned_at' => current_time( 'mysql' ),
+                ),
+                sprintf(
+                    'Content decay scan: %d posts, %d stale, %d critical',
+                    $results['summary']['total'],
+                    $results['summary']['yellow'],
+                    $results['summary']['red']
+                )
+            );
+            return;
+        }
+
+        // Legacy fallback
         $api_key = get_option( 'dhc_api_key' );
         $sub     = get_option( 'dhc_subscription', array() );
         $hub_url = $sub['hub_url'] ?? 'https://hub.dsquaredmedia.net';

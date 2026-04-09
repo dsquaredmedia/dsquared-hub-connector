@@ -70,7 +70,12 @@ class DHC_Admin {
         $activity_log = array_reverse( get_option( 'dhc_activity_log', array() ) );
         $cwv_metrics  = DHC_Site_Health::get_aggregated_metrics( 30 );
         $seo_plugin   = DHC_SEO_Meta::detect_seo_plugin();
-        $ai_profile   = get_option( 'dhc_ai_business_profile', array() );
+        // Check both option names for compatibility (v1.6 unified to dhc_business_profile)
+        $ai_profile   = get_option( 'dhc_business_profile', array() );
+        if ( empty( $ai_profile ) ) {
+            $ai_profile = get_option( 'dhc_ai_business_profile', array() );
+        }
+        $last_heartbeat = get_option( 'dhc_last_heartbeat', array() );
         ?>
         <div class="dhc-wrap">
             <!-- Header -->
@@ -298,6 +303,21 @@ class DHC_Admin {
                     <div class="dhc-card-header">
                         <h2><?php esc_html_e( 'Business Profile for AI Discovery', 'dsquared-hub-connector' ); ?></h2>
                         <p class="dhc-card-desc"><?php esc_html_e( 'This information is used to generate your llms.txt, llms-full.txt, and LocalBusiness schema so AI platforms know your business exists and what services you offer.', 'dsquared-hub-connector' ); ?></p>
+                    </div>
+                    <div class="dhc-card-body" style="padding-bottom:0;">
+                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;padding:12px 16px;background:#F0F1FA;border-radius:8px;border:1px solid #E0E2F0;">
+                            <span class="dashicons dashicons-download" style="font-size:18px;width:18px;height:18px;color:#5661FF;flex-shrink:0;"></span>
+                            <div style="flex:1;">
+                                <strong style="font-size:13px;color:#131B3A;"><?php esc_html_e( 'Auto-Populate from Hub', 'dsquared-hub-connector' ); ?></strong>
+                                <p style="font-size:12px;color:#64748b;margin:2px 0 0;"><?php esc_html_e( 'Pull your business profile data from your Hub account to pre-fill these fields. You can review and edit before saving.', 'dsquared-hub-connector' ); ?></p>
+                            </div>
+                            <button type="button" class="dhc-btn dhc-btn-outline" id="dhc-sync-from-hub" style="white-space:nowrap;">
+                                <span class="dashicons dashicons-update" style="font-size:14px;width:14px;height:14px;line-height:14px;"></span>
+                                <?php esc_html_e( 'Sync from Hub', 'dsquared-hub-connector' ); ?>
+                            </button>
+                        </div>
+                        <div id="dhc-sync-status" class="dhc-status-msg" style="margin-bottom:12px;"></div>
+                    </div>
                     </div>
                     <div class="dhc-card-body">
                         <div class="dhc-field">
@@ -549,11 +569,22 @@ class DHC_Admin {
         $profile['services'] = array_filter( array_map( 'trim', explode( "\n", $profile['services_text'] ) ) );
         $profile['service_areas'] = array_filter( array_map( 'trim', explode( "\n", $profile['service_areas_text'] ) ) );
 
+        // Save to both option names for compatibility
         update_option( 'dhc_ai_business_profile', $profile );
+        update_option( 'dhc_business_profile', $profile );
 
         // Regenerate llms.txt files if the AI Discovery class has the method
         if ( class_exists( 'DHC_AI_Discovery' ) && method_exists( 'DHC_AI_Discovery', 'regenerate_files' ) ) {
             DHC_AI_Discovery::regenerate_files( $profile );
+        }
+
+        // Log the save event to the Hub
+        if ( class_exists( 'DHC_Event_Logger' ) ) {
+            DHC_Event_Logger::ai_discovery(
+                'profile_saved',
+                array( 'source' => 'admin_form', 'time' => current_time( 'mysql' ) ),
+                'AI Discovery business profile saved from admin'
+            );
         }
 
         wp_send_json_success( esc_html__( 'Business profile saved and AI discovery files regenerated.', 'dsquared-hub-connector' ) );

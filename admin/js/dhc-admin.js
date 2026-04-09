@@ -175,4 +175,72 @@
         });
     });
 
+    // ── Sync from Hub (AI Discovery auto-populate) ──────────────
+    $(document).on('click', '#dhc-sync-from-hub', function() {
+        var btn = $(this);
+        var status = $('#dhc-sync-status');
+        var originalHtml = btn.html();
+
+        btn.prop('disabled', true).html('<span class="dashicons dashicons-update dhc-spin" style="font-size:14px;width:14px;height:14px;line-height:14px;"></span> Syncing...');
+        status.text('').removeClass('success error');
+
+        $.post(dhcAdmin.ajaxUrl, {
+            action: 'dhc_sync_from_hub',
+            nonce: dhcAdmin.nonce,
+            force: 0
+        }, function(response) {
+            btn.prop('disabled', false).html(originalHtml);
+            if (response.success) {
+                status.text(response.data.message || 'Profile synced!').addClass('success').removeClass('error');
+
+                // Auto-fill the form fields with the synced data
+                var p = response.data.profile || {};
+                if (p.business_name) $('#dhc-biz-name').val(p.business_name);
+                if (p.description) $('#dhc-biz-desc').val(p.description);
+                if (p.phone) $('#dhc-biz-phone').val(p.phone);
+                if (p.email) $('#dhc-biz-email').val(p.email);
+                if (p.address) $('#dhc-biz-address').val(p.address);
+                if (p.hours) $('#dhc-biz-hours').val(p.hours);
+                if (p.extra_info) $('#dhc-biz-extra').val(p.extra_info);
+
+                // Handle services (could be array of strings or objects)
+                if (p.services_text) {
+                    $('#dhc-biz-services').val(p.services_text);
+                } else if (p.services && Array.isArray(p.services)) {
+                    var serviceNames = p.services.map(function(s) {
+                        return typeof s === 'string' ? s : (s.name || '');
+                    });
+                    $('#dhc-biz-services').val(serviceNames.join('\n'));
+                }
+
+                // Handle service areas
+                if (p.service_areas_text) {
+                    $('#dhc-biz-areas').val(p.service_areas_text);
+                } else if (p.service_areas && Array.isArray(p.service_areas)) {
+                    $('#dhc-biz-areas').val(p.service_areas.join('\n'));
+                }
+
+                setTimeout(function() { status.text(''); }, 6000);
+            } else {
+                status.text(response.data || 'Sync failed.').addClass('error').removeClass('success');
+            }
+        }).fail(function() {
+            btn.prop('disabled', false).html(originalHtml);
+            status.text('Network error. Please try again.').addClass('error').removeClass('success');
+        });
+    });
+
+    // ── URL tab parameter support ────────────────────────────────
+    // If URL has ?tab=ai-discovery, switch to that tab on load
+    $(document).ready(function() {
+        var urlParams = new URLSearchParams(window.location.search);
+        var tab = urlParams.get('tab');
+        if (tab) {
+            var tabBtn = $('.dhc-tab[data-tab="' + tab + '"]');
+            if (tabBtn.length) {
+                tabBtn.trigger('click');
+            }
+        }
+    });
+
 })(jQuery);

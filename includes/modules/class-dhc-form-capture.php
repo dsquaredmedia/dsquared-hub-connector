@@ -495,6 +495,19 @@ class DHC_Form_Capture {
             'timeout'  => 10,
             'blocking' => false,
         ) );
+
+        // v1.6: Also log the event via centralized event logger
+        if ( class_exists( 'DHC_Event_Logger' ) ) {
+            DHC_Event_Logger::form_capture(
+                'lead_captured',
+                array(
+                    'form_plugin' => $lead['form_plugin'] ?? 'unknown',
+                    'form_name'   => $lead['form_name'] ?? '',
+                    'is_spam'     => false,
+                    'time'        => current_time( 'mysql' ),
+                )
+            );
+        }
     }
 
     /* ─── Counters (for stats, not storing lead data) ─── */

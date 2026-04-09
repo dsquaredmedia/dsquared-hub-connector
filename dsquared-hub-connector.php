@@ -3,7 +3,7 @@
  * Plugin Name:       Dsquared Hub Connector
  * Plugin URI:        https://hub.dsquaredmedia.net
  * Description:       Connect your WordPress site to Dsquared Media Hub — auto-post drafts, inject schema markup, sync SEO meta, monitor site health, AI discovery, content decay alerts, and lead capture. All features are subscription-gated and will gracefully disable if your subscription lapses without affecting your website.
- * Version:           1.5.4
+ * Version:           1.6.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Dsquared Media
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Plugin constants ────────────────────────────────────────────────
-define( 'DHC_VERSION', '1.5.4' );
+define( 'DHC_VERSION', '1.6.0' );
 define( 'DHC_PLUGIN_FILE', __FILE__ );
 define( 'DHC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DHC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -56,6 +56,11 @@ require_once DHC_PLUGIN_DIR . 'includes/class-dhc-admin.php';
 require_once DHC_PLUGIN_DIR . 'includes/class-dhc-updater.php';
 require_once DHC_PLUGIN_DIR . 'includes/class-dhc-privacy.php';
 require_once DHC_PLUGIN_DIR . 'includes/class-dhc-core.php';
+
+// v1.6 Core: Heartbeat, Event Logger, Hub Sync
+require_once DHC_PLUGIN_DIR . 'includes/class-dhc-heartbeat.php';
+require_once DHC_PLUGIN_DIR . 'includes/class-dhc-event-logger.php';
+require_once DHC_PLUGIN_DIR . 'includes/class-dhc-hub-sync.php';
 
 // v1.0 Modules
 require_once DHC_PLUGIN_DIR . 'includes/modules/class-dhc-auto-post.php';
@@ -118,24 +123,69 @@ function dhc_activate() {
         ) );
     }
 
+    // Schedule heartbeat cron
+    if ( ! wp_next_scheduled( DHC_Heartbeat::CRON_HOOK ) ) {
+        wp_schedule_event( time(), DHC_Heartbeat::INTERVAL_NAME, DHC_Heartbeat::CRON_HOOK );
+    }
+
+    // Attempt AI Discovery auto-populate from Hub (deferred to avoid blocking activation)
+    wp_schedule_single_event( time() + 10, 'dhc_auto_populate_profile' );
+
     // Flush rewrite rules for REST endpoints
     flush_rewrite_rules();
 }
 register_activation_hook( __FILE__, 'dhc_activate' );
+
+// Handle deferred auto-populate
+add_action( 'dhc_auto_populate_profile', function() {
+    if ( class_exists( 'DHC_Hub_Sync' ) ) {
+        DHC_Hub_Sync::auto_populate_on_enable();
+    }
+} );
 
 // ── Deactivation hook ───────────────────────────────────────────────
 function dhc_deactivate() {
     // Clean up transients
     delete_transient( 'dhc_subscription_cache' );
     delete_transient( 'dhc_update_cache' );
+    delete_transient( 'dhc_show_sync_notice' );
 
     // Remove scheduled cron events
-    $crons = array( 'dhc_content_decay_scan', 'dhc_monthly_lead_reset' );
+    $crons = array(
+        'dhc_content_decay_scan',
+        'dhc_monthly_lead_reset',
+        DHC_Heartbeat::CRON_HOOK,
+        'dhc_auto_populate_profile',
+    );
     foreach ( $crons as $hook ) {
         $timestamp = wp_next_scheduled( $hook );
         if ( $timestamp ) {
             wp_unschedule_event( $timestamp, $hook );
         }
+        wp_clear_scheduled_hook( $hook );
+    }
+
+    // Send a final "disconnected" event to the Hub
+    $api_key = get_option( 'dhc_api_key', '' );
+    if ( ! empty( $api_key ) ) {
+        $hub_url = DHC_Heartbeat::get_hub_url();
+        wp_remote_post( $hub_url . '/api/plugin/event', array(
+            'body'    => wp_json_encode( array(
+                'event'  => 'plugin_deactivated',
+                'site'   => home_url( '/' ),
+                'module' => 'core',
+                'data'   => array(
+                    'plugin_version' => DHC_VERSION,
+                    'time'           => current_time( 'mysql' ),
+                ),
+            ) ),
+            'headers' => array(
+                'Content-Type'  => 'application/json',
+                'X-DHC-API-Key' => $api_key,
+            ),
+            'timeout'  => 5,
+            'blocking' => false,
+        ) );
     }
 
     flush_rewrite_rules();
