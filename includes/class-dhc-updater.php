@@ -40,12 +40,45 @@ class DHC_Updater {
         add_action( 'upgrader_process_complete', array( __CLASS__, 'clear_cache' ), 10, 2 );
         add_filter( 'plugin_row_meta', array( __CLASS__, 'plugin_row_meta' ), 10, 2 );
 
+        // Enable auto-updates by default. WordPress normally makes the
+        // user click "Enable auto-updates" per-plugin. For a managed
+        // connector that's friction for no benefit — we just want new
+        // releases to land overnight. Site owners can still disable it
+        // from the Plugins screen if they have a reason to pin.
+        add_filter( 'auto_update_plugin', array( __CLASS__, 'enable_auto_update' ), 10, 2 );
+
         // SVG Support conflict protection: disable SVG sanitization during plugin installs/updates
         add_action( 'upgrader_pre_install', array( __CLASS__, 'disable_svg_support_on_install' ), 1, 2 );
         add_action( 'upgrader_post_install', array( __CLASS__, 'restore_svg_support_after_install' ), 99, 3 );
 
         // Also hook into the upload process itself
         add_filter( 'wp_handle_upload_prefilter', array( __CLASS__, 'protect_plugin_upload' ), 1 );
+    }
+
+    /**
+     * Opt our plugin into auto-updates by default.
+     *
+     * Honors the dhc_disable_auto_update option so a site owner can
+     * pin to a specific version (add_option('dhc_disable_auto_update',
+     * true)), and honors the wp-admin per-plugin toggle if the user
+     * has explicitly set it ("asked_for" list in WP core). In every
+     * other case — the default — we return true.
+     *
+     * @param bool|null $update The value the previous filter returned.
+     * @param object    $item   The plugin item being checked.
+     * @return bool|null
+     */
+    public static function enable_auto_update( $update, $item ) {
+        if ( empty( $item ) || ! isset( $item->plugin ) ) {
+            return $update;
+        }
+        if ( DHC_PLUGIN_BASENAME !== $item->plugin ) {
+            return $update;
+        }
+        if ( get_option( 'dhc_disable_auto_update', false ) ) {
+            return false;
+        }
+        return true;
     }
 
     /**

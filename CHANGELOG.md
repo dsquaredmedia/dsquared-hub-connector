@@ -4,6 +4,14 @@ All notable changes to the Dsquared Hub Connector will be documented in this fil
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2026-04-21
+
+### Added
+- **Auto-updates enabled by default.** The plugin now opts itself into WordPress's `auto_update_plugin` filter, so new releases are applied automatically overnight without requiring the user to click "Enable auto-updates" in the Plugins screen. Site owners can still opt out by setting the `dhc_disable_auto_update` option to `true`.
+
+### Fixed
+- Tightened the Hub's `/api/plugin/update-check` fallback so it queries GitHub Releases dynamically instead of returning a hard-coded (and drifting) version string.
+
 ## [1.5.0] - 2026-04-03
 
 ### Added
