@@ -58,7 +58,7 @@ class DHC_API_Key {
         if ( ! self::validate_key_format( $api_key ) ) {
             return array(
                 'valid'   => false,
-                'message' => esc_html__( 'Invalid API key format. Keys should start with dhc_live_ followed by 32 characters.', 'dsquared-hub-connector' ),
+                'message' => esc_html__( 'Invalid API key format. Keys should start with dhc_live_ or dhc_test_ followed by a 30–80 character body (letters, digits, - or _).', 'dsquared-hub-connector' ),
             );
         }
 
@@ -202,9 +202,13 @@ class DHC_API_Key {
     /**
      * Validate API key format locally
      *
-     * Valid formats:
-     *   dhc_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  (40 chars total)
-     *   dhc_test_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  (41 chars total)
+     * Valid formats (Hub has used two generators historically):
+     *   dhc_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  — 40 chars alphanumeric (legacy)
+     *   dhc_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX — 43 chars base64url (current)
+     *   dhc_test_ variants of the above
+     *
+     * Allowed character class for the body is base64url:
+     *   A-Z a-z 0-9 - _
      *
      * @param string $api_key The API key to validate.
      * @return bool
@@ -215,14 +219,17 @@ class DHC_API_Key {
             return false;
         }
 
-        // Remove prefix and check remaining length (should be 32 hex chars)
+        // Length check: enough body to carry real entropy, but not so much
+        // we accept a paste of the wrong thing. Covers both 40-char legacy
+        // keys and 43-char base64url keys with headroom either side.
         $key_body = substr( $api_key, 9 );
-        if ( strlen( $key_body ) < 20 || strlen( $key_body ) > 64 ) {
+        if ( strlen( $key_body ) < 20 || strlen( $key_body ) > 80 ) {
             return false;
         }
 
-        // Must be alphanumeric
-        if ( ! ctype_alnum( $key_body ) ) {
+        // base64url character set — legacy keys (alphanumeric only) also
+        // pass this filter, so both generations validate cleanly.
+        if ( ! preg_match( '/^[A-Za-z0-9_\-]+$/', $key_body ) ) {
             return false;
         }
 

@@ -4,6 +4,11 @@ All notable changes to the Dsquared Hub Connector will be documented in this fil
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.1] - 2026-04-21
+
+### Fixed
+- API key validation now accepts base64url characters (`-` and `_`) alongside the legacy alphanumeric-only format. The Hub's current key generator emits base64url-encoded 43-character bodies; the stricter `ctype_alnum` check was rejecting every freshly-generated key.
+
 ## [1.7.0] - 2026-04-21
 
 ### Added
