@@ -82,10 +82,21 @@ class DHC_AI_Discovery {
         }
 
         $profile = get_option( 'dhc_business_profile', array() );
+        // Fall back to a site-metadata-derived profile so /llms.txt is
+        // always a valid, useful response even before the user has filled
+        // in the AI Discovery settings. Returning 404 here was causing the
+        // plugin to look broken on fresh installs — AI crawlers can't
+        // discover anything about the business when the URL is dead.
         if ( empty( $profile ) ) {
-            status_header( 404 );
-            echo "# No business profile configured.\n# Set up AI Discovery in the Dsquared Hub Connector settings.";
-            exit;
+            $profile = $this->build_fallback_profile();
+            // If even the fallback is completely empty (totally fresh WP
+            // install with no title/tagline), THEN 404 is appropriate.
+            if ( empty( $profile['business_name'] ) && empty( $profile['description'] ) ) {
+                status_header( 404 );
+                header( 'Content-Type: text/plain; charset=utf-8' );
+                echo "# No business profile configured.\n# Set up AI Discovery in the Dsquared Hub Connector settings.";
+                exit;
+            }
         }
 
         header( 'Content-Type: text/plain; charset=utf-8' );
@@ -97,6 +108,91 @@ class DHC_AI_Discovery {
             echo $this->generate_llms_summary( $profile );
         }
         exit;
+    }
+
+    /* ─── Build a fallback profile from site metadata ─── */
+    /*
+     * Used when no business profile has been saved yet so /llms.txt is
+     * still a valid response instead of a 404. Pulls from:
+     *   1. WordPress options (blogname, blogdescription, admin_email)
+     *   2. schema.org LocalBusiness / Organization JSON-LD on the homepage
+     *   3. An existing dhc_ai_business_profile row if it exists
+     * Whatever comes back gets cached in the `dhc_business_profile` option
+     * so subsequent hits don't re-scrape the homepage every time.
+     */
+    private function build_fallback_profile() {
+        $cached = get_transient( 'dhc_fallback_profile_v1' );
+        if ( is_array( $cached ) ) return $cached;
+
+        $profile = array(
+            'business_name' => get_bloginfo( 'name' ),
+            'description'   => get_bloginfo( 'description' ),
+            'phone'         => '',
+            'address'       => '',
+            'email'         => '',
+            'services'      => array(),
+            'service_areas' => array(),
+            'hours'         => '',
+            'extra_info'    => '',
+        );
+
+        // Try to enrich from homepage schema.org JSON-LD. One synchronous
+        // HTTP round-trip against our own origin; cached for 6 hours.
+        $home = home_url( '/' );
+        $resp = wp_remote_get( $home, array( 'timeout' => 6, 'redirection' => 2 ) );
+        if ( ! is_wp_error( $resp ) && wp_remote_retrieve_response_code( $resp ) === 200 ) {
+            $html = wp_remote_retrieve_body( $resp );
+            if ( ! empty( $html ) && class_exists( 'DOMDocument' ) ) {
+                libxml_use_internal_errors( true );
+                $doc = new DOMDocument();
+                $doc->loadHTML( '<?xml encoding="UTF-8">' . $html );
+                libxml_clear_errors();
+                $xpath = new DOMXPath( $doc );
+                $jsonlds = $xpath->query( '//script[@type="application/ld+json"]' );
+                foreach ( $jsonlds as $s ) {
+                    $decoded = json_decode( $s->textContent, true );
+                    if ( ! is_array( $decoded ) ) continue;
+                    $nodes = isset( $decoded['@graph'] ) && is_array( $decoded['@graph'] ) ? $decoded['@graph'] : array( $decoded );
+                    foreach ( $nodes as $n ) {
+                        if ( ! is_array( $n ) ) continue;
+                        $type = $n['@type'] ?? '';
+                        if ( is_array( $type ) ) $type = implode( ',', $type );
+                        if ( stripos( $type, 'LocalBusiness' ) === false
+                            && stripos( $type, 'Organization' ) === false
+                            && stripos( $type, 'ProfessionalService' ) === false ) continue;
+                        if ( ! empty( $n['name'] ) )        $profile['business_name'] = (string) $n['name'];
+                        if ( ! empty( $n['description'] ) ) $profile['description']   = (string) $n['description'];
+                        if ( ! empty( $n['telephone'] ) )   $profile['phone']         = (string) $n['telephone'];
+                        if ( ! empty( $n['email'] ) )       $profile['email']         = (string) $n['email'];
+                        if ( ! empty( $n['address'] ) && is_array( $n['address'] ) ) {
+                            $addr  = $n['address'];
+                            $parts = array_filter( array(
+                                $addr['streetAddress']   ?? '',
+                                $addr['addressLocality'] ?? '',
+                                ( $addr['addressRegion'] ?? '' ) . ' ' . ( $addr['postalCode'] ?? '' ),
+                            ) );
+                            $profile['address'] = trim( implode( ', ', array_map( 'trim', $parts ) ) );
+                        }
+                        if ( ! empty( $n['openingHours'] ) ) {
+                            $profile['hours'] = is_array( $n['openingHours'] )
+                                ? implode( '; ', $n['openingHours'] )
+                                : (string) $n['openingHours'];
+                        }
+                        if ( ! empty( $n['areaServed'] ) && is_array( $n['areaServed'] ) ) {
+                            $areas = array();
+                            foreach ( $n['areaServed'] as $a ) {
+                                if ( is_string( $a ) ) { $areas[] = $a; continue; }
+                                if ( is_array( $a ) && ! empty( $a['name'] ) ) $areas[] = (string) $a['name'];
+                            }
+                            if ( ! empty( $areas ) ) $profile['service_areas'] = $areas;
+                        }
+                    }
+                }
+            }
+        }
+
+        set_transient( 'dhc_fallback_profile_v1', $profile, 6 * HOUR_IN_SECONDS );
+        return $profile;
     }
 
     /* ─── Generate llms.txt (summary) ─── */

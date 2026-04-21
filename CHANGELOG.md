@@ -4,6 +4,12 @@ All notable changes to the Dsquared Hub Connector will be documented in this fil
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.8.1] - 2026-04-21
+
+### Fixed
+- `/llms.txt` no longer 404s on sites that haven't filled in AI Discovery settings yet. Falls back to a profile built from the WP blogname, blogdescription, and any schema.org LocalBusiness / Organization JSON-LD on the homepage. Cached for 6 hours. AI crawlers always get something useful.
+- Rewrite rules now auto-flush on plugin version upgrade. Previously new routes (like `/llms.txt`) wouldn't take effect after an auto-update because the activation hook only runs on manual activate — so the rule existed in code but not in WordPress's rewrite cache.
+
 ## [1.8.0] - 2026-04-21
 
 ### Added
