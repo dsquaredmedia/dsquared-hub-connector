@@ -4,6 +4,27 @@ All notable changes to the Dsquared Hub Connector will be documented in this fil
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.0] - 2026-04-23
+
+### Added
+- **Hub Dashboard — at-a-glance analytics in WordPress admin.** A Site Kit-style landing page that renders your actual data from the Dsquared Hub right inside WP admin, the second a client clicks into the plugin. No more "what am I paying for?" moment after connecting.
+  - **KPI tiles** — last 7 days of Clicks, Impressions, Avg Position, CTR (from GSC).
+  - **14-day sessions trend** — SVG sparkline from GA4 + 14-day total.
+  - **Quick wins** — CTR-gap keywords where you rank 2-10 but CTR is <60% of expected. Each row shows the current CTR, expected CTR, and the estimated click recovery from a title/meta rewrite.
+  - **Top search queries** and **Top landing pages** — side-by-side tables of your highest-traffic queries + URLs, with position.
+  - **Recent SEO changes tracked** — the Hub's SEO Watch rows for this site showing Δ position + Δ clicks per shipped AutoReason or Deep Page Analysis win.
+  - **Fresh content drafts** — recent Content Studio drafts ready to review.
+  - **Recent Hub activity** — latest 5 AI runs (competitor intel, authority recs, briefs, etc.).
+- Data blocks only render when they have content, so an early-life site doesn't show empty panels.
+- Refresh button (manual cache-bust) + plugin-side transient cache with 30-minute TTL so we don't hammer GSC / GA4 / the Hub on every page load.
+- **Dashboard is now the default landing page** when you click "Dsquared Hub" in the admin sidebar. The Connection settings form moved to its own sub-menu link.
+
+### Changed
+- Admin menu order: **Dashboard → Connection → Link Scanner → Analytics**. Asset enqueue unchanged — all sub-pages share the same CSS shell plus a small inline block just for the dashboard's KPI grid + sparkline.
+
+### Requires
+- Hub endpoint `GET /api/plugin/dashboard` (shipped alongside this release on `hub.dsquaredmedia.net`). The plugin authenticates via the existing X-DHC-API-Key — no new credentials needed.
+
 ## [1.10.0] - 2026-04-23
 
 ### Added

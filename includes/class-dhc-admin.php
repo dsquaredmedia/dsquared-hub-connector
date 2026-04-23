@@ -29,25 +29,50 @@ class DHC_Admin {
      * Add the admin menu page — uses a built-in Dashicon instead of custom SVG
      */
     public static function add_menu_page() {
+        // v1.11: Dashboard is now the DEFAULT landing page. When you click
+        // "Dsquared Hub" in the admin sidebar, you land on the Site Kit-
+        // style at-a-glance dashboard first, not the settings form.
+        $has_dashboard = class_exists( 'DHC_Dashboard' );
+        $root_callback = $has_dashboard
+            ? array( 'DHC_Dashboard', 'render_admin_page' )
+            : array( __CLASS__, 'render_page' );
+
         add_menu_page(
             esc_html__( 'Dsquared Hub', 'dsquared-hub-connector' ),
             esc_html__( 'Dsquared Hub', 'dsquared-hub-connector' ),
             'manage_options',
             'dsquared-hub',
-            array( __CLASS__, 'render_page' ),
+            $root_callback,
             'dashicons-admin-site-alt3',
             30
         );
-        // Main page as first sub-item so the parent "Dsquared Hub" link
-        // doesn't show as clickable-but-landing-in-a-weird-place.
+
+        // First sub-item = Dashboard (mirrors the root slug). When
+        // DHC_Dashboard is loaded we rename the root to "Dashboard";
+        // otherwise it falls back to "Connection" so older setups
+        // keep working.
         add_submenu_page(
             'dsquared-hub',
-            esc_html__( 'Connection', 'dsquared-hub-connector' ),
-            esc_html__( 'Connection', 'dsquared-hub-connector' ),
+            esc_html__( $has_dashboard ? 'Dashboard' : 'Connection', 'dsquared-hub-connector' ),
+            esc_html__( $has_dashboard ? 'Dashboard' : 'Connection', 'dsquared-hub-connector' ),
             'manage_options',
             'dsquared-hub',
-            array( __CLASS__, 'render_page' )
+            $root_callback
         );
+
+        // When Dashboard is the root, expose the settings form as its
+        // own sub-page so users still have a direct link to it.
+        if ( $has_dashboard ) {
+            add_submenu_page(
+                'dsquared-hub',
+                esc_html__( 'Connection', 'dsquared-hub-connector' ),
+                esc_html__( 'Connection', 'dsquared-hub-connector' ),
+                'manage_options',
+                'dsquared-hub-connection',
+                array( __CLASS__, 'render_page' )
+            );
+        }
+
         // v1.10 — Link Scanner sub-page
         if ( class_exists( 'DHC_Link_Scanner' ) ) {
             add_submenu_page(
@@ -87,6 +112,12 @@ class DHC_Admin {
         wp_enqueue_style( 'dashicons' );
         wp_enqueue_style( 'dhc-admin', DHC_PLUGIN_URL . 'admin/css/dhc-admin.css', array(), DHC_VERSION );
         wp_enqueue_style( 'dhc-google-fonts', 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap', array(), null );
+
+        // v1.11: dashboard sub-page needs some extra inline styles —
+        // cheap enough to inline rather than add a second .css file.
+        if ( class_exists( 'DHC_Dashboard' ) ) {
+            add_action( 'admin_print_styles', array( 'DHC_Dashboard', 'print_inline_styles' ) );
+        }
 
         wp_enqueue_script( 'dhc-admin', DHC_PLUGIN_URL . 'admin/js/dhc-admin.js', array( 'jquery' ), DHC_VERSION, true );
 
