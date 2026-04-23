@@ -4,6 +4,19 @@ All notable changes to the Dsquared Hub Connector will be documented in this fil
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.9.1] - 2026-04-23
+
+### Changed
+- **Admin UI refresh — cleaner white/black/grey palette.** Less warm-beige, less pastel. Specific changes:
+  - Card borders switched from warm slate (`#e2e8f0`) to neutral zinc (`#eaeaea`). Same applies to tab container, inputs, and notice boxes.
+  - Core Web Vitals tiles are now all-white with a 3px status bar at the bottom (was pastel-green / pastel-amber / pastel-red tints across the whole tile).
+  - Only "Poor" CWV values render in red; good + needs-work render in neutral black so your eye isn't pulled to every number equally.
+  - Status badges on the dark header switched from saturated green/amber backgrounds to translucent white with a low-saturation dot. Reads against navy without candy-coloring the top strip.
+  - Notice cards (warning + info) dropped the amber/blue backgrounds in favor of neutral zinc with a 3px left-accent border.
+  - Inputs use single-weight neutral border (was 2px warm slate) with a smaller focus ring.
+  - Sync-box icon background recolored from blue tint to neutral zinc.
+- Net result: the plugin screen looks less 2018-dashboard-colorful and more 2026-admin-clean. Typography, logo, and accent indigo unchanged.
+
 ## [1.9.0] - 2026-04-22
 
 ### Added
