@@ -3,7 +3,7 @@
  * Plugin Name:       Dsquared Hub Connector
  * Plugin URI:        https://hub.dsquaredmedia.net
  * Description:       Connect your WordPress site to Dsquared Media Hub — auto-post drafts, inject schema markup, sync SEO meta, monitor site health, AI discovery, content decay alerts, and lead capture. All features are subscription-gated and will gracefully disable if your subscription lapses without affecting your website.
- * Version:           1.11.0
+ * Version:           1.11.1
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Dsquared Media
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Plugin constants ────────────────────────────────────────────────
-define( 'DHC_VERSION', '1.11.0' );
+define( 'DHC_VERSION', '1.11.1' );
 define( 'DHC_PLUGIN_FILE', __FILE__ );
 define( 'DHC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DHC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -226,6 +226,18 @@ function dhc_init() {
     add_action( 'admin_init', function() {
         if ( class_exists( 'DHC_Inventory' ) )    DHC_Inventory::schedule();
         if ( class_exists( 'DHC_Link_Scanner' ) ) DHC_Link_Scanner::schedule();
+
+        // Self-heal rewrite rules. AI Discovery registers /llms.txt and
+        // /.well-known/ai-plugin.json rewrites, which stop working when
+        // another plugin flushes rules after ours (e.g. a permalink-
+        // changing plugin). If the rule is missing, re-flush once.
+        if ( class_exists( 'DHC_API_Key' ) && DHC_API_Key::is_module_available( 'ai_discovery' ) ) {
+            $rules = get_option( 'rewrite_rules' );
+            $has_llms = is_array( $rules ) && isset( $rules['^llms\.txt$'] );
+            if ( ! $has_llms ) {
+                flush_rewrite_rules( false );
+            }
+        }
     } );
 
     // Auto-flush rewrite rules when the plugin version changes.

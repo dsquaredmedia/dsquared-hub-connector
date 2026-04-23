@@ -70,8 +70,13 @@ class DHC_AI_Discovery {
         $is_llms_full = get_query_var( 'dhc_llms_full' );
 
         if ( ! $is_llms && ! $is_llms_full ) {
-            // Fallback: check REQUEST_URI directly
-            $uri = trim( $_SERVER['REQUEST_URI'], '/' );
+            // Fallback: check REQUEST_URI directly. Previously this used a
+            // strict string compare which missed URLs with trailing query
+            // strings (e.g. /llms.txt?utm_source=…) and cached prefixes.
+            // Strip the path only, then normalize.
+            $raw_uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
+            $path    = parse_url( $raw_uri, PHP_URL_PATH );
+            $uri     = strtolower( trim( (string) $path, '/' ) );
             if ( $uri === 'llms.txt' ) {
                 $is_llms = true;
             } elseif ( $uri === 'llms-full.txt' ) {

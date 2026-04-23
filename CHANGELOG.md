@@ -4,6 +4,12 @@ All notable changes to the Dsquared Hub Connector will be documented in this fil
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.1] - 2026-04-23
+
+### Fixed
+- **`/llms.txt` self-healing** — sites where another plugin flushed rewrite rules after ours would 404 on `/llms.txt` and `/.well-known/ai-plugin.json`. On every admin page load, we now check for the llms.txt rewrite rule and re-flush if it's missing. Cheap (one `get_option` read in the hot path).
+- **`/llms.txt` fallback path** — REQUEST_URI strict-match missed URLs with query strings (e.g. `/llms.txt?utm_source=…`) and case variations. Path is now parsed via `parse_url()` and normalized to lowercase before matching.
+
 ## [1.11.0] - 2026-04-23
 
 ### Added
