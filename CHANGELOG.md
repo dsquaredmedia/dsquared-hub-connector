@@ -4,6 +4,11 @@ All notable changes to the Dsquared Hub Connector will be documented in this fil
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.12.1] - 2026-04-23
+
+### Fixed
+- **PHP 8+ fatal on plugin load.** `class-dhc-inventory.php` line 149 had an unparenthesized nested ternary (`a ? b : c ? d : e`) in the MySQL version lookup. PHP 7.4 deprecated the ambiguous form; PHP 8.0+ makes it a hard fatal. Added explicit parentheses so the inventory module (and the plugin overall) loads again on PHP 8 hosts.
+
 ## [1.12.0] - 2026-04-23
 
 ### Added

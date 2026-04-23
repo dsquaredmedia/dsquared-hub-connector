@@ -148,7 +148,7 @@ class DHC_Inventory {
             'php_version'      => phpversion(),
             'mysql_version'    => function_exists( 'mysql_get_server_info' )
                                     ? @mysql_get_server_info()
-                                    : ( $GLOBALS['wpdb'] ?? null ) ? $GLOBALS['wpdb']->db_version() : null,
+                                    : ( isset( $GLOBALS['wpdb'] ) ? $GLOBALS['wpdb']->db_version() : null ),
             'is_multisite'     => is_multisite(),
             'is_ssl'           => is_ssl(),
             'is_debug'         => defined( 'WP_DEBUG' ) && WP_DEBUG,
