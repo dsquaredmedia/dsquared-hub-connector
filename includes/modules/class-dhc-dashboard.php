@@ -33,8 +33,14 @@ class DHC_Dashboard {
      * Set $force_refresh = true to bypass cache (Refresh button).
      */
     public static function fetch( $force_refresh = false ) {
+        // Respect a user-selected window. Each window gets its own
+        // cache bucket so switching 7 ↔ 30 doesn't force a refetch of
+        // the previously-shown window.
+        $days = isset( $_GET['dhc_days'] ) ? max( 1, min( 365, (int) $_GET['dhc_days'] ) ) : 7;
+        $cache_key = self::CACHE_KEY . '_d' . $days;
+
         if ( ! $force_refresh ) {
-            $cached = get_transient( self::CACHE_KEY );
+            $cached = get_transient( $cache_key );
             if ( is_array( $cached ) ) {
                 $cached['_cache'] = 'hit';
                 return $cached;
@@ -50,7 +56,7 @@ class DHC_Dashboard {
         }
 
         $hub_url = defined( 'DHC_HUB_API_BASE' ) ? DHC_HUB_API_BASE : 'https://hub.dsquaredmedia.net/api';
-        $url     = rtrim( $hub_url, '/' ) . '/plugin/dashboard?site_url=' . rawurlencode( home_url( '/' ) );
+        $url     = rtrim( $hub_url, '/' ) . '/plugin/dashboard?site_url=' . rawurlencode( home_url( '/' ) ) . '&days=' . $days;
 
         $res = wp_remote_get( $url, array(
             'timeout'   => 15,
@@ -82,14 +88,18 @@ class DHC_Dashboard {
         // Only cache successful responses — error payloads should
         // retry on the next page load rather than wait 30 min.
         if ( ! empty( $data['connected'] ) ) {
-            set_transient( self::CACHE_KEY, $data, self::CACHE_TTL );
+            set_transient( $cache_key, $data, self::CACHE_TTL );
         }
         $data['_cache'] = 'miss';
         return $data;
     }
 
     public static function clear_cache() {
-        delete_transient( self::CACHE_KEY );
+        // Clear every per-window bucket. Common windows enumerated.
+        foreach ( array( 7, 14, 28, 30, 60, 90, 180, 365 ) as $d ) {
+            delete_transient( self::CACHE_KEY . '_d' . $d );
+        }
+        delete_transient( self::CACHE_KEY ); // legacy key from v1.11
     }
 
     /** Admin sub-page renderer */
@@ -107,26 +117,36 @@ class DHC_Dashboard {
 
         $data = self::fetch( $force );
         ?>
+        <?php
+        $active_days = isset( $_GET['dhc_days'] ) ? max( 1, min( 365, (int) $_GET['dhc_days'] ) ) : 7;
+        $period_label = ( $active_days === 7 ? 'Last 7 days' : 'Last ' . $active_days . ' days' );
+        ?>
         <div class="wrap dhc-wrap">
             <div class="dhc-header">
                 <div class="dhc-header-left">
                     <div class="dhc-logo">
                         <div class="dhc-logo-icon" style="display:flex;align-items:center;justify-content:center;">
-                            <span class="dashicons dashicons-chart-area" style="color:#4f46e5;font-size:22px;"></span>
+                            <span class="dashicons dashicons-chart-area" style="color:#EC4899;font-size:22px;"></span>
                         </div>
                     </div>
                     <div>
                         <h1 class="dhc-title">Hub Dashboard</h1>
                         <div class="dhc-version">
                             <?php if ( ! empty( $data['connected'] ) && isset( $data['period'] ) ) : ?>
-                                Last 7 days · <?php echo esc_html( $data['period']['start'] ); ?> to <?php echo esc_html( $data['period']['end'] ); ?>
+                                <?php echo esc_html( $period_label ); ?> · <?php echo esc_html( $data['period']['start'] ); ?> to <?php echo esc_html( $data['period']['end'] ); ?>
                             <?php else : ?>
                                 Connect an API key to see your data
                             <?php endif; ?>
                         </div>
                     </div>
                 </div>
-                <div class="dhc-header-right">
+                <div class="dhc-header-right" style="display:flex;align-items:center;gap:8px;">
+                    <select id="dhc-period-select" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;font-size:13px;cursor:pointer;"
+                            onchange="(function(v){var u=new URL(location.href);u.searchParams.set('dhc_days',v);location.href=u.toString();})(this.value)">
+                        <?php foreach ( array( 7, 14, 28, 30, 60, 90 ) as $d ) : ?>
+                            <option value="<?php echo esc_attr( $d ); ?>" <?php selected( $active_days, $d ); ?>><?php echo $d === 7 ? 'Last 7 days' : 'Last ' . $d . ' days'; ?></option>
+                        <?php endforeach; ?>
+                    </select>
                     <a class="dhc-btn dhc-btn-outline" href="https://hub.dsquaredmedia.net" target="_blank" rel="noopener">
                         Open Hub <span class="dashicons dashicons-external" style="font-size:14px;margin-left:2px;"></span>
                     </a>
@@ -159,11 +179,10 @@ class DHC_Dashboard {
         // ── Block: KPI tiles ────────────────────────────
         if ( ! empty( $data['summary'] ) ) :
             $s = $data['summary'];
+            $period_days = (int) ( $data['period']['days'] ?? 7 );
+            $period_sub  = 'Last ' . $period_days . ' days';
 
-            // Derived KPIs — computed from data the Hub already returned
-            // so no extra API calls required. Even when the Hub hasn't
-            // been updated to include new summary fields, the plugin
-            // still shows richer stats.
+            // Derived KPIs — computed from data the Hub already returned.
             $top_queries = is_array( $data['top_queries'] ?? null ) ? $data['top_queries'] : array();
             $top_pages   = is_array( $data['top_pages']   ?? null ) ? $data['top_pages']   : array();
             $traffic     = is_array( $data['traffic']     ?? null ) ? $data['traffic']     : array();
@@ -171,22 +190,45 @@ class DHC_Dashboard {
             $top3_kw  = count( array_filter( $top_queries, function( $q ) { return ( (float) ( $q['position'] ?? 99 ) ) <= 3.5; } ) );
             $top10_kw = count( array_filter( $top_queries, function( $q ) { return ( (float) ( $q['position'] ?? 99 ) ) <= 10.5; } ) );
             $pages_with_traffic = count( $top_pages );
-            $sessions_14d = array_sum( array_map( function( $p ) { return (int) ( $p['value'] ?? $p[1] ?? 0 ); }, $traffic ) );
+            $sessions_total = array_sum( array_map( function( $p ) { return (int) ( $p['value'] ?? $p[1] ?? 0 ); }, $traffic ) );
 
-            // Count items from the other blocks — quick context tiles
             $ctr_gaps_count  = is_array( $data['ctr_gaps']   ?? null ) ? count( $data['ctr_gaps']   ) : 0;
             $drafts_count    = is_array( $data['drafts']     ?? null ) ? count( $data['drafts']     ) : 0;
             $watches_count   = is_array( $data['seo_watches']?? null ) ? count( $data['seo_watches']) : 0;
+
+            // Best / worst pickers for "Best keyword" + "Fastest riser"
+            $best_kw = null;
+            $best_clicks = 0;
+            foreach ( $top_queries as $q ) {
+                $c = (int) ( $q['clicks'] ?? 0 );
+                if ( $c > $best_clicks ) { $best_clicks = $c; $best_kw = $q; }
+            }
+            $best_page = null;
+            $best_page_clicks = 0;
+            foreach ( $top_pages as $p ) {
+                $c = (int) ( $p['clicks'] ?? 0 );
+                if ( $c > $best_page_clicks ) { $best_page_clicks = $c; $best_page = $p; }
+            }
+
+            // Device + source breakdown from the Hub payload (v1.12.3+).
+            $device_top = is_array( $data['device_top'] ?? null ) ? $data['device_top'] : null;
+            $source_top = is_array( $data['source_top'] ?? null ) ? $data['source_top'] : null;
+            $country_top = is_array( $data['country_top'] ?? null ) ? $data['country_top'] : null;
         ?>
             <div class="dhc-dash-kpi-grid">
-                <?php echo self::kpi_tile( 'Clicks',        self::num( $s['clicks_7d']      ?? 0 ), 'Last 7 days' ); ?>
-                <?php echo self::kpi_tile( 'Impressions',   self::num( $s['impressions_7d'] ?? 0 ), 'Last 7 days' ); ?>
+                <?php echo self::kpi_tile( 'Clicks',        self::num( $s['clicks_7d']      ?? 0 ), $period_sub ); ?>
+                <?php echo self::kpi_tile( 'Impressions',   self::num( $s['impressions_7d'] ?? 0 ), $period_sub ); ?>
                 <?php echo self::kpi_tile( 'Avg position',  number_format( (float) ( $s['avg_position'] ?? 0 ), 1 ), 'across all queries' ); ?>
                 <?php echo self::kpi_tile( 'CTR',           ( $s['ctr_pct'] ?? 0 ) . '%', 'across all queries' ); ?>
-                <?php if ( $top3_kw > 0 || $top10_kw > 0 ) echo self::kpi_tile( 'Keywords in top 3',  self::num( $top3_kw ),  'of your top ' . count( $top_queries ) . ' by clicks' ); ?>
+                <?php if ( $top3_kw > 0 ) echo self::kpi_tile( 'Keywords in top 3',  self::num( $top3_kw ),  'of your top ' . count( $top_queries ) . ' by clicks' ); ?>
                 <?php if ( $top10_kw > 0 ) echo self::kpi_tile( 'Keywords in top 10', self::num( $top10_kw ), 'of your top ' . count( $top_queries ) . ' by clicks' ); ?>
-                <?php if ( $pages_with_traffic > 0 ) echo self::kpi_tile( 'Pages getting traffic', self::num( $pages_with_traffic ), 'in the last 7 days' ); ?>
-                <?php if ( $sessions_14d > 0 ) echo self::kpi_tile( 'Sessions', self::num( $sessions_14d ), 'last 14 days (GA4)' ); ?>
+                <?php if ( $pages_with_traffic > 0 ) echo self::kpi_tile( 'Pages getting traffic', self::num( $pages_with_traffic ), $period_sub ); ?>
+                <?php if ( $sessions_total > 0 ) echo self::kpi_tile( 'Sessions', self::num( $sessions_total ), $period_sub . ' (GA4)' ); ?>
+                <?php if ( $best_kw ) echo self::kpi_tile( 'Top keyword', self::short( $best_kw['keyword'] ?? '', 22 ), self::num( $best_clicks ) . ' clicks · pos ' . number_format( (float) ( $best_kw['position'] ?? 0 ), 1 ) ); ?>
+                <?php if ( $best_page ) echo self::kpi_tile( 'Top page', self::short( $best_page['path'] ?? '/', 26 ), self::num( $best_page_clicks ) . ' clicks' ); ?>
+                <?php if ( $device_top && ! empty( $device_top['label'] ) ) echo self::kpi_tile( 'Top device', esc_html( $device_top['label'] ), ( $device_top['pct'] ?? 0 ) . '% of sessions' ); ?>
+                <?php if ( $source_top && ! empty( $source_top['label'] ) ) echo self::kpi_tile( 'Top source', esc_html( $source_top['label'] ), ( $source_top['pct'] ?? 0 ) . '% of traffic' ); ?>
+                <?php if ( $country_top && ! empty( $country_top['label'] ) ) echo self::kpi_tile( 'Top country', esc_html( $country_top['label'] ), ( $country_top['pct'] ?? 0 ) . '% of visitors' ); ?>
                 <?php if ( $ctr_gaps_count > 0 ) echo self::kpi_tile( 'CTR quick wins', self::num( $ctr_gaps_count ), 'pages underperforming' ); ?>
                 <?php if ( $watches_count > 0 ) echo self::kpi_tile( 'Tracked changes', self::num( $watches_count ), 'SEO Watch entries' ); ?>
                 <?php if ( $drafts_count > 0 ) echo self::kpi_tile( 'Drafts ready', self::num( $drafts_count ), 'to review + publish' ); ?>

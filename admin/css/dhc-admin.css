@@ -287,6 +287,34 @@
     padding: 22px 28px;
 }
 
+/* Tab content wrapper — guarantees every card inside any tab gets
+   the same horizontal footprint. Fixes the Site Health + Activity
+   Log tabs rendering their cards wider than others. */
+.dhc-tab-content {
+    width: 100%;
+    max-width: 100%;
+}
+.dhc-tab-content .dhc-card {
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+}
+
+/* Dashboard KPI grid — explicit 4-column on desktop so tiles line up
+   exactly. Collapses to 2 on mid-width and 1 on mobile. */
+.dhc-dash-kpi-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 14px;
+    margin: 0 0 24px;
+}
+@media (max-width: 980px) {
+    .dhc-dash-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 540px) {
+    .dhc-dash-kpi-grid { grid-template-columns: 1fr !important; }
+}
+
 /* ── Form Fields ── */
 .dhc-field {
     margin-bottom: 22px;

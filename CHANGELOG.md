@@ -4,6 +4,17 @@ All notable changes to the Dsquared Hub Connector will be documented in this fil
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.12.3] - 2026-04-24
+
+### Added
+- **Date range selector** on the Hub Dashboard (7 / 14 / 28 / 30 / 60 / 90 days). Plugin cache is bucketed per-window so switching ranges doesn't force a round-trip, and the Hub backend now honors the `days` query param.
+- **More KPI tiles** — "Top keyword" (highest-clicks query this period, with position), "Top page" (highest-clicks landing page), "Top device / source / country" (populated when the Hub payload includes these, coming in the companion Hub release). Dashboard now renders up to 14 tiles, aligned in a strict 4-column grid.
+
+### Changed
+- **Pink header icon** — the chart glyph on the Hub Dashboard header card now renders in pink (`#EC4899`) so it pops against the dark header.
+- **4-column KPI grid enforced** — explicit `grid-template-columns: repeat(4, 1fr)` with a 2-col fallback under 980px and 1-col under 540px.
+- **Fixed alignment** of cards on Site Health and Activity Log tabs — they were inheriting slightly different horizontal margins than the Connection tab. All `.dhc-tab-content .dhc-card` now gets `width: 100%; margin-left: 0; margin-right: 0`.
+
 ## [1.12.2] - 2026-04-23
 
 ### Changed
