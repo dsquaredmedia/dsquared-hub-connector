@@ -179,8 +179,18 @@ class DHC_Dashboard {
         // ── Block: KPI tiles ────────────────────────────
         if ( ! empty( $data['summary'] ) ) :
             $s = $data['summary'];
+            $prev = is_array( $data['previous_summary'] ?? null ) ? $data['previous_summary'] : null;
             $period_days = (int) ( $data['period']['days'] ?? 7 );
             $period_sub  = 'Last ' . $period_days . ' days';
+
+            $delta = function( $key, $lower_is_better = false ) use ( $s, $prev ) {
+                if ( ! $prev ) return null;
+                return array(
+                    'prev' => $prev[ $key ] ?? 0,
+                    'cur'  => $s[ $key ]    ?? 0,
+                    'lower_is_better' => $lower_is_better,
+                );
+            };
 
             // Derived KPIs — computed from data the Hub already returned.
             $top_queries = is_array( $data['top_queries'] ?? null ) ? $data['top_queries'] : array();
@@ -216,10 +226,10 @@ class DHC_Dashboard {
             $country_top = is_array( $data['country_top'] ?? null ) ? $data['country_top'] : null;
         ?>
             <div class="dhc-dash-kpi-grid">
-                <?php echo self::kpi_tile( 'Clicks',        self::num( $s['clicks_7d']      ?? 0 ), $period_sub ); ?>
-                <?php echo self::kpi_tile( 'Impressions',   self::num( $s['impressions_7d'] ?? 0 ), $period_sub ); ?>
-                <?php echo self::kpi_tile( 'Avg position',  number_format( (float) ( $s['avg_position'] ?? 0 ), 1 ), 'across all queries' ); ?>
-                <?php echo self::kpi_tile( 'CTR',           ( $s['ctr_pct'] ?? 0 ) . '%', 'across all queries' ); ?>
+                <?php echo self::kpi_tile( 'Clicks',        self::num( $s['clicks_7d']      ?? 0 ), $period_sub, $delta( 'clicks_7d' ) ); ?>
+                <?php echo self::kpi_tile( 'Impressions',   self::num( $s['impressions_7d'] ?? 0 ), $period_sub, $delta( 'impressions_7d' ) ); ?>
+                <?php echo self::kpi_tile( 'Avg position',  number_format( (float) ( $s['avg_position'] ?? 0 ), 1 ), 'across all queries', $delta( 'avg_position', true ) ); ?>
+                <?php echo self::kpi_tile( 'CTR',           ( $s['ctr_pct'] ?? 0 ) . '%', 'across all queries', $delta( 'ctr_pct' ) ); ?>
                 <?php if ( $top3_kw > 0 ) echo self::kpi_tile( 'Keywords in top 3',  self::num( $top3_kw ),  'of your top ' . count( $top_queries ) . ' by clicks' ); ?>
                 <?php if ( $top10_kw > 0 ) echo self::kpi_tile( 'Keywords in top 10', self::num( $top10_kw ), 'of your top ' . count( $top_queries ) . ' by clicks' ); ?>
                 <?php if ( $pages_with_traffic > 0 ) echo self::kpi_tile( 'Pages getting traffic', self::num( $pages_with_traffic ), $period_sub ); ?>
@@ -434,10 +444,43 @@ class DHC_Dashboard {
 
     // ── Small helpers ────────────────────────────────────────
 
-    private static function kpi_tile( $label, $value, $sub ) {
+    /**
+     * KPI tile with optional delta pill showing vs-previous-period change.
+     * $delta = [ 'prev' => number, 'cur' => number, 'lower_is_better' => bool ]
+     *   lower_is_better = true for avg_position (moving from pos 5 to 3 is good)
+     */
+    private static function kpi_tile( $label, $value, $sub, $delta = null ) {
+        $delta_pill = '';
+        if ( is_array( $delta ) && isset( $delta['prev'], $delta['cur'] ) ) {
+            $prev = (float) $delta['prev'];
+            $cur  = (float) $delta['cur'];
+            $lower_is_better = ! empty( $delta['lower_is_better'] );
+            // Percentage change. When prev is 0, show "new" instead of infinite.
+            if ( $prev == 0 && $cur == 0 ) {
+                // no change worth showing
+            } elseif ( $prev == 0 ) {
+                $delta_pill = '<span class="dhc-dash-kpi-delta dhc-delta-up">NEW</span>';
+            } else {
+                $pct = ( ( $cur - $prev ) / abs( $prev ) ) * 100;
+                $improved = $lower_is_better ? ( $pct < -1 ) : ( $pct > 1 );
+                $flat     = abs( $pct ) < 1;
+                $cls      = $flat ? 'dhc-delta-flat' : ( $improved ? 'dhc-delta-up' : 'dhc-delta-down' );
+                $arrow    = $flat ? '→' : ( $improved ? '▲' : '▼' );
+                // Show absolute % with sign. Avg position = raw position
+                // delta (e.g. "−2.1") rather than percent because clients
+                // read position moves intuitively.
+                $display  = $lower_is_better
+                    ? ( ( $cur - $prev ) >= 0 ? '+' : '' ) . number_format( $cur - $prev, 1 )
+                    : ( $pct >= 0 ? '+' : '' ) . round( $pct ) . '%';
+                $delta_pill = '<span class="dhc-dash-kpi-delta ' . $cls . '">' . $arrow . ' ' . esc_html( $display ) . '</span>';
+            }
+        }
         return '<div class="dhc-dash-kpi">'
              . '<div class="dhc-dash-kpi-label">' . esc_html( $label ) . '</div>'
-             . '<div class="dhc-dash-kpi-value">' . esc_html( (string) $value ) . '</div>'
+             . '<div class="dhc-dash-kpi-value-row">'
+             .     '<div class="dhc-dash-kpi-value">' . esc_html( (string) $value ) . '</div>'
+             .     $delta_pill
+             . '</div>'
              . '<div class="dhc-dash-kpi-sub">' . esc_html( $sub ) . '</div>'
              . '</div>';
     }
@@ -591,6 +634,12 @@ class DHC_Dashboard {
                 letter-spacing: 0.1em;
                 margin-bottom: 10px;
             }
+            .dhc-dash-kpi-value-row {
+                display: flex;
+                align-items: baseline;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
             .dhc-dash-kpi-value {
                 font-size: 28px;
                 font-weight: 800;
@@ -599,6 +648,17 @@ class DHC_Dashboard {
                 font-variant-numeric: tabular-nums;
                 line-height: 1;
             }
+            .dhc-dash-kpi-delta {
+                font-size: 12px;
+                font-weight: 700;
+                padding: 3px 8px;
+                border-radius: 999px;
+                white-space: nowrap;
+                line-height: 1;
+            }
+            .dhc-delta-up   { background: #ecfdf5; color: #047857; }
+            .dhc-delta-down { background: #fef2f2; color: #b91c1c; }
+            .dhc-delta-flat { background: #f1f5f9; color: #64748b; }
             .dhc-dash-kpi-sub {
                 font-size: 12px;
                 color: #9ca3af;

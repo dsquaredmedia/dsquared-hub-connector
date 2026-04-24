@@ -4,6 +4,12 @@ All notable changes to the Dsquared Hub Connector will be documented in this fil
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.12.5] - 2026-04-24
+
+### Added
+- **Month-over-month delta pills on KPI tiles.** Clicks / Impressions / CTR / Avg Position each show a ▲ or ▼ pill with the % change vs the preceding period of equal length. Avg Position shows the raw position delta (e.g. "−2.1") instead of %, because clients read position moves more intuitively that way. Pills are color-coded (green improved / red declined / gray flat) with a ±1% deadzone so noise doesn't look alarming.
+- **Backend**: `/api/plugin/dashboard` now runs the previous-period GSC summary query in parallel with the current one (no extra latency) and returns `previous_summary` + `previous_period` in the payload.
+
 ## [1.12.4] - 2026-04-24
 
 ### Added
