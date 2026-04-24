@@ -3,7 +3,7 @@
  * Plugin Name:       Dsquared Hub Connector
  * Plugin URI:        https://hub.dsquaredmedia.net
  * Description:       Connect your WordPress site to Dsquared Media Hub — auto-post drafts, inject schema markup, sync SEO meta, monitor site health, AI discovery, content decay alerts, and lead capture. All features are subscription-gated and will gracefully disable if your subscription lapses without affecting your website.
- * Version:           1.12.5
+ * Version:           1.13.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Dsquared Media
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Plugin constants ────────────────────────────────────────────────
-define( 'DHC_VERSION', '1.12.5' );
+define( 'DHC_VERSION', '1.13.0' );
 define( 'DHC_PLUGIN_FILE', __FILE__ );
 define( 'DHC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DHC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -84,6 +84,9 @@ require_once DHC_PLUGIN_DIR . 'includes/modules/class-dhc-link-scanner.php';
 
 // v1.11 Modules
 require_once DHC_PLUGIN_DIR . 'includes/modules/class-dhc-dashboard.php';
+
+// v1.13 Modules
+require_once DHC_PLUGIN_DIR . 'includes/modules/class-dhc-event-tracker.php';
 
 // ── Activation hook ─────────────────────────────────────────────────
 function dhc_activate() {
@@ -216,8 +219,9 @@ function dhc_init() {
     DHC_Core::get_instance();
 
     // v1.10 module hooks — register cron actions + analytics injection
-    if ( class_exists( 'DHC_Inventory' ) )    DHC_Inventory::init();
-    if ( class_exists( 'DHC_Analytics' ) )    DHC_Analytics::init();
+    if ( class_exists( 'DHC_Inventory' ) )      DHC_Inventory::init();
+    if ( class_exists( 'DHC_Analytics' ) )      DHC_Analytics::init();
+    if ( class_exists( 'DHC_Event_Tracker' ) )  DHC_Event_Tracker::init();
     if ( class_exists( 'DHC_Link_Scanner' ) ) DHC_Link_Scanner::init();
 
     // Self-heal crons on every admin load — if another plugin or a

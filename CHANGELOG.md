@@ -4,6 +4,16 @@ All notable changes to the Dsquared Hub Connector will be documented in this fil
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.13.0] - 2026-04-24
+
+### Added
+- **Event Tracking module** — new D2 Hub sub-page. Lets non-technical clients turn on common GTM-style events without ever opening GTM. Every event fires to `window.dataLayer` (GTM) **and** `gtag()` (GA4) so it works regardless of which you have.
+  - **Preset events** (each a single checkbox): `form_submit` (auto-detects Contact Form 7, Gravity, WPForms, Elementor, plus a generic fallback), `phone_click` (any `tel:` link), `email_click` (any `mailto:`), `outbound_click` (hostname ≠ yours), `scroll_depth` (25/50/75/100%), `video_play` / `video_complete` (YouTube + Vimeo postMessage), `cta_click` (configurable selector list), `file_download` (pdf/doc/xls/ppt/zip/csv/txt/mp3/mp4).
+  - **Custom events** — name + CSS selector pair. "Fire `book_now_click` when anyone clicks `.book-now-btn`."
+  - **JavaScript API** — `window.dhcTrack('checkout_started', { plan: 'pro' })` for developer-defined events.
+  - **PHP hook** — `do_action('dhc_track_event', 'lead_scored', [ 'score' => 42 ])` for other plugins / themes. Queued as an option + flushed on the next client page load so server-initiated events land in GA4.
+- Event listeners run entirely in-page (no Hub round-trip) so tracking has zero added latency and keeps working even when the Hub is offline.
+
 ## [1.12.5] - 2026-04-24
 
 ### Added
