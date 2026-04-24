@@ -37,14 +37,18 @@ class DHC_Admin {
             ? array( 'DHC_Dashboard', 'render_admin_page' )
             : array( __CLASS__, 'render_page' );
 
+        // Position 3 puts us directly under Dashboard (position 2) —
+        // matches Site Kit's placement so clients see us as a first-
+        // class part of their WP admin, not buried in the tools area.
+        // Menu title "D2 Hub" keeps the sidebar label compact.
         add_menu_page(
-            esc_html__( 'Dsquared Hub', 'dsquared-hub-connector' ),
-            esc_html__( 'Dsquared Hub', 'dsquared-hub-connector' ),
+            esc_html__( 'D2 Hub', 'dsquared-hub-connector' ),
+            esc_html__( 'D2 Hub', 'dsquared-hub-connector' ),
             'manage_options',
             'dsquared-hub',
             $root_callback,
             'dashicons-admin-site-alt3',
-            30
+            3
         );
 
         // First sub-item = Dashboard (mirrors the root slug). When
@@ -725,8 +729,30 @@ class DHC_Admin {
                 return sprintf( __( 'Content decay scan completed — %d stale posts found', 'dsquared-hub-connector' ), $entry['stale_count'] ?? 0 );
             case 'form_capture':
                 return sprintf( __( 'Lead captured from %s', 'dsquared-hub-connector' ), $entry['form_plugin'] ?? 'form' );
+            // v1.12+ events logged by DHC_Event_Logger
+            case 'profile_synced':
+            case 'profile_synced_from_hub':
+                return __( 'Profile synced from hub', 'dsquared-hub-connector' );
+            case 'content_decay_scan':
+                return __( 'Content decay scan', 'dsquared-hub-connector' );
+            case 'heartbeat_sent':
+                return __( 'Heartbeat sent to Hub', 'dsquared-hub-connector' );
+            case 'llms_txt_generated':
+                return __( 'llms.txt regenerated', 'dsquared-hub-connector' );
+            case 'inventory_snapshot':
+                return __( 'Site inventory sent to Hub', 'dsquared-hub-connector' );
+            case 'link_scan_completed':
+                return sprintf( __( 'Link scan completed — %d broken link(s)', 'dsquared-hub-connector' ), $entry['broken'] ?? 0 );
             default:
-                return ucfirst( str_replace( '_', ' ', $entry['action'] ?? 'Unknown action' ) );
+                $raw = $entry['action'] ?? '';
+                if ( empty( $raw ) ) {
+                    // Don't scare the user with "Unknown action" — an event
+                    // was logged, we just don't have a friendly label for
+                    // its action_type. This is almost always a legacy row
+                    // or a new event type we haven't labeled yet.
+                    return __( 'Event recorded', 'dsquared-hub-connector' );
+                }
+                return ucfirst( str_replace( '_', ' ', $raw ) );
         }
     }
 
@@ -745,16 +771,103 @@ class DHC_Admin {
 
         $home_url = home_url( '/' );
         $profile  = array();
+        $html     = '';
+        $errors   = array();
 
-        // Fetch the homepage — wp_remote_get runs through WordPress's HTTP
-        // API which honors filters and proxy settings.
-        $response = wp_remote_get( $home_url, array( 'timeout' => 12, 'redirection' => 3 ) );
-        if ( is_wp_error( $response ) ) {
-            wp_send_json_error( array( 'message' => 'Homepage fetch failed: ' . $response->get_error_message() ) );
-        }
-        $html = wp_remote_retrieve_body( $response );
+        // Fetch chain — loopback fetches on sites behind Cloudflare or
+        // with misconfigured internal DNS often fail on the first try.
+        // Attempt:
+        //   1. wp_remote_get with a realistic UA + sslverify
+        //   2. Same with sslverify=false (some shared hosts have broken
+        //      loopback certs)
+        //   3. Direct curl to 127.0.0.1 with Host: <site-domain> — bypasses
+        //      DNS and any CDN fronting the public URL.
+        $ua = 'DsquaredHubConnector/' . ( defined( 'DHC_VERSION' ) ? DHC_VERSION : '1.0' ) . ' (scrape-homepage)';
+
+        $attempt = function( $args ) use ( &$errors ) {
+            $resp = wp_remote_get( $args['url'], $args['opts'] );
+            if ( is_wp_error( $resp ) ) {
+                $errors[] = $args['label'] . ': ' . $resp->get_error_message();
+                return '';
+            }
+            $code = (int) wp_remote_retrieve_response_code( $resp );
+            if ( $code >= 400 ) {
+                $errors[] = $args['label'] . ': HTTP ' . $code;
+                return '';
+            }
+            $body = (string) wp_remote_retrieve_body( $resp );
+            if ( empty( $body ) ) {
+                $errors[] = $args['label'] . ': empty response';
+                return '';
+            }
+            return $body;
+        };
+
+        // Try 1: normal loopback
+        $html = $attempt( array(
+            'label' => 'loopback',
+            'url'   => $home_url,
+            'opts'  => array(
+                'timeout'     => 12,
+                'redirection' => 3,
+                'sslverify'   => true,
+                'headers'     => array( 'User-Agent' => $ua ),
+            ),
+        ) );
+
+        // Try 2: skip SSL verify (fixes self-signed or mismatched certs
+        // on shared hosts where the public domain resolves internally).
         if ( empty( $html ) ) {
-            wp_send_json_error( array( 'message' => __( 'Homepage returned empty response.', 'dsquared-hub-connector' ) ) );
+            $html = $attempt( array(
+                'label' => 'loopback-nossl',
+                'url'   => $home_url,
+                'opts'  => array(
+                    'timeout'     => 12,
+                    'redirection' => 3,
+                    'sslverify'   => false,
+                    'headers'     => array( 'User-Agent' => $ua ),
+                ),
+            ) );
+        }
+
+        // Try 3: hit the loopback IP directly with the Host header set.
+        // Bypasses DNS + any Cloudflare proxy in front of the site.
+        if ( empty( $html ) && function_exists( 'curl_init' ) ) {
+            $host     = (string) parse_url( $home_url, PHP_URL_HOST );
+            $scheme   = (string) parse_url( $home_url, PHP_URL_SCHEME );
+            if ( ! empty( $host ) ) {
+                $direct = ( $scheme === 'https' ? 'https' : 'http' ) . '://127.0.0.1' . ( (string) parse_url( $home_url, PHP_URL_PATH ) ?: '/' );
+                $ch = curl_init( $direct );
+                curl_setopt_array( $ch, array(
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_TIMEOUT        => 12,
+                    CURLOPT_SSL_VERIFYHOST => 0,
+                    CURLOPT_SSL_VERIFYPEER => 0,
+                    CURLOPT_HTTPHEADER     => array(
+                        'Host: ' . $host,
+                        'User-Agent: ' . $ua,
+                    ),
+                ) );
+                $body = curl_exec( $ch );
+                $code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE );
+                $cerr = curl_error( $ch );
+                curl_close( $ch );
+                if ( ! empty( $body ) && $code < 400 ) {
+                    $html = $body;
+                } else {
+                    $errors[] = 'loopback-127.0.0.1: ' . ( $cerr ?: 'HTTP ' . $code );
+                }
+            }
+        }
+
+        if ( empty( $html ) ) {
+            wp_send_json_error( array(
+                'message' => 'Could not reach the homepage from this WordPress server. '
+                           . 'Tried ' . count( $errors ) . ' method(s): ' . implode( ' · ', $errors )
+                           . '. Common cause: a firewall (Cloudflare) blocks the server\'s own outbound IP. '
+                           . 'If you see "name lookup timed out", contact the host to unblock loopback DNS.',
+            ) );
         }
 
         // Parse with DOMDocument — suppress parse warnings for malformed HTML.

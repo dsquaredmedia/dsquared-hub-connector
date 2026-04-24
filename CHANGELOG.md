@@ -4,6 +4,17 @@ All notable changes to the Dsquared Hub Connector will be documented in this fil
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.12.2] - 2026-04-23
+
+### Changed
+- **Admin menu repositioned.** Renamed "Dsquared Hub" → "D2 Hub" and moved the menu to position 3 (directly under Dashboard, matching Site Kit's placement). Clients see us as first-class, not buried.
+- **Dashboard KPI strip expanded** from 4 tiles to up to 10. Derived from data the Hub already returns, so no Hub-side API changes needed: Keywords in Top 3 / Top 10 (from top_queries positions), Pages getting traffic (top_pages count), 14-day Sessions total (sum of traffic sparkline), CTR quick-wins count, Tracked changes, Drafts ready. Only shows tiles that have data.
+- **Activity Log labels** — default case no longer says "Unknown action". Added friendly labels for profile_synced, content_decay_scan, heartbeat_sent, llms_txt_generated, inventory_snapshot, link_scan_completed. Legacy rows without an action now show "Event recorded".
+- **llms.txt / llms-full.txt / IndexNow key** rendering — URLs were inheriting WP admin's default link color, showing as a jarring pink/red. Now styled as code-chips with a neutral gray background and subtle indigo link color.
+
+### Fixed
+- **Scrape homepage "Network error" on CF-fronted sites.** The loopback fetch was hitting Cloudflare in front of the WP site, which blocked the server's own outbound IP. Added a 3-step fallback chain: (1) normal loopback, (2) loopback with sslverify off, (3) direct curl to 127.0.0.1 with `Host:` header set — bypasses DNS and any CDN entirely. Errors from each attempt are bundled into the final failure message for diagnostic visibility.
+
 ## [1.12.1] - 2026-04-23
 
 ### Fixed

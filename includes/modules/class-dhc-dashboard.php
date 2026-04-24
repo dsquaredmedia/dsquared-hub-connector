@@ -159,12 +159,37 @@ class DHC_Dashboard {
         // ── Block: KPI tiles ────────────────────────────
         if ( ! empty( $data['summary'] ) ) :
             $s = $data['summary'];
+
+            // Derived KPIs — computed from data the Hub already returned
+            // so no extra API calls required. Even when the Hub hasn't
+            // been updated to include new summary fields, the plugin
+            // still shows richer stats.
+            $top_queries = is_array( $data['top_queries'] ?? null ) ? $data['top_queries'] : array();
+            $top_pages   = is_array( $data['top_pages']   ?? null ) ? $data['top_pages']   : array();
+            $traffic     = is_array( $data['traffic']     ?? null ) ? $data['traffic']     : array();
+
+            $top3_kw  = count( array_filter( $top_queries, function( $q ) { return ( (float) ( $q['position'] ?? 99 ) ) <= 3.5; } ) );
+            $top10_kw = count( array_filter( $top_queries, function( $q ) { return ( (float) ( $q['position'] ?? 99 ) ) <= 10.5; } ) );
+            $pages_with_traffic = count( $top_pages );
+            $sessions_14d = array_sum( array_map( function( $p ) { return (int) ( $p['value'] ?? $p[1] ?? 0 ); }, $traffic ) );
+
+            // Count items from the other blocks — quick context tiles
+            $ctr_gaps_count  = is_array( $data['ctr_gaps']   ?? null ) ? count( $data['ctr_gaps']   ) : 0;
+            $drafts_count    = is_array( $data['drafts']     ?? null ) ? count( $data['drafts']     ) : 0;
+            $watches_count   = is_array( $data['seo_watches']?? null ) ? count( $data['seo_watches']) : 0;
         ?>
             <div class="dhc-dash-kpi-grid">
                 <?php echo self::kpi_tile( 'Clicks',        self::num( $s['clicks_7d']      ?? 0 ), 'Last 7 days' ); ?>
                 <?php echo self::kpi_tile( 'Impressions',   self::num( $s['impressions_7d'] ?? 0 ), 'Last 7 days' ); ?>
                 <?php echo self::kpi_tile( 'Avg position',  number_format( (float) ( $s['avg_position'] ?? 0 ), 1 ), 'across all queries' ); ?>
                 <?php echo self::kpi_tile( 'CTR',           ( $s['ctr_pct'] ?? 0 ) . '%', 'across all queries' ); ?>
+                <?php if ( $top3_kw > 0 || $top10_kw > 0 ) echo self::kpi_tile( 'Keywords in top 3',  self::num( $top3_kw ),  'of your top ' . count( $top_queries ) . ' by clicks' ); ?>
+                <?php if ( $top10_kw > 0 ) echo self::kpi_tile( 'Keywords in top 10', self::num( $top10_kw ), 'of your top ' . count( $top_queries ) . ' by clicks' ); ?>
+                <?php if ( $pages_with_traffic > 0 ) echo self::kpi_tile( 'Pages getting traffic', self::num( $pages_with_traffic ), 'in the last 7 days' ); ?>
+                <?php if ( $sessions_14d > 0 ) echo self::kpi_tile( 'Sessions', self::num( $sessions_14d ), 'last 14 days (GA4)' ); ?>
+                <?php if ( $ctr_gaps_count > 0 ) echo self::kpi_tile( 'CTR quick wins', self::num( $ctr_gaps_count ), 'pages underperforming' ); ?>
+                <?php if ( $watches_count > 0 ) echo self::kpi_tile( 'Tracked changes', self::num( $watches_count ), 'SEO Watch entries' ); ?>
+                <?php if ( $drafts_count > 0 ) echo self::kpi_tile( 'Drafts ready', self::num( $drafts_count ), 'to review + publish' ); ?>
             </div>
         <?php endif; ?>
 

@@ -363,19 +363,41 @@
     gap: 18px;
 }
 
-.dhc-info-value a {
-    color: #4f46e5;
-    text-decoration: none;
+/* URL chips — previously inherited WP admin's link color which
+   rendered as a jarring pink/red against the card. Present as a
+   subtle code-styled pill with a neutral gray background. */
+.dhc-info-value a,
+.dhc-info-value a:visited,
+.dhc-info-value a:active {
+    color: #4f46e5 !important;
+    text-decoration: none !important;
     word-break: break-all;
+    background-clip: padding-box;
 }
-.dhc-info-value a:hover {
-    text-decoration: underline;
+.dhc-info-value a:hover,
+.dhc-info-value a:focus {
+    text-decoration: underline !important;
+    color: #4338ca !important;
 }
 
 .dhc-mono {
+    display: inline-block;
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    font-size: 13px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #1e293b;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 4px 8px;
     word-break: break-all;
+    max-width: 100%;
+}
+.dhc-mono a {
+    color: #4f46e5 !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
 }
 
 /* ── Actions ── */
