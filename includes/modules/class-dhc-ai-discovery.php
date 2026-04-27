@@ -26,7 +26,17 @@ class DHC_AI_Discovery {
     public function __construct() {
         // Rewrite rules for llms.txt and llms-full.txt
         add_action( 'init', array( $this, 'add_rewrite_rules' ) );
-        add_action( 'template_redirect', array( $this, 'serve_llms_txt' ) );
+        // Serve at the EARLIEST possible point on every request lifecycle:
+        //   1. parse_request — runs before WP query is built; if the URL is
+        //      /llms.txt we short-circuit immediately so nothing else can
+        //      override us (themes, security plugins, custom 404 handlers).
+        //   2. template_redirect priority 1 — backup for hosts where some
+        //      plugin loads earlier than us on parse_request.
+        // Earlier deploys hooked template_redirect at default priority 10
+        // and a sibling plugin / theme was returning the WP 404 template
+        // before our handler could run on ewmacdowellroofing.com.
+        add_action( 'parse_request', array( $this, 'maybe_serve_llms_txt_early' ), 1 );
+        add_action( 'template_redirect', array( $this, 'serve_llms_txt' ), 1 );
 
         // Inject schema into wp_head
         add_action( 'wp_head', array( $this, 'inject_ai_schema' ), 1 );
@@ -40,13 +50,55 @@ class DHC_AI_Discovery {
         add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 
         // Add .well-known/ai-plugin.json
-        add_action( 'template_redirect', array( $this, 'serve_ai_plugin_json' ) );
+        add_action( 'template_redirect', array( $this, 'serve_ai_plugin_json' ), 1 );
 
         // Generate IndexNow key file
-        add_action( 'template_redirect', array( $this, 'serve_indexnow_key' ) );
+        add_action( 'template_redirect', array( $this, 'serve_indexnow_key' ), 1 );
 
         // Add robots.txt entries
         add_filter( 'robots_txt', array( $this, 'add_robots_entries' ), 10, 2 );
+    }
+
+    /**
+     * Earliest-possible llms.txt handler.
+     *
+     * Runs on `parse_request` BEFORE WordPress has even decided what
+     * post/page/404 the URL maps to. This is the only spot guaranteed
+     * to run before themes and other plugins can hijack the response.
+     * If the path matches /llms.txt or /llms-full.txt we serve the
+     * file content and exit — no further WP processing.
+     */
+    public function maybe_serve_llms_txt_early( $wp ) {
+        if ( ! isset( $_SERVER['REQUEST_URI'] ) ) return;
+        $raw_uri = (string) $_SERVER['REQUEST_URI'];
+        $path    = parse_url( $raw_uri, PHP_URL_PATH );
+        if ( ! is_string( $path ) ) return;
+        $uri = strtolower( trim( $path, '/' ) );
+        if ( $uri !== 'llms.txt' && $uri !== 'llms-full.txt' ) return;
+
+        $is_full = ( $uri === 'llms-full.txt' );
+
+        $profile = get_option( 'dhc_business_profile', array() );
+        if ( empty( $profile ) ) {
+            $profile = $this->build_fallback_profile();
+            if ( empty( $profile['business_name'] ) && empty( $profile['description'] ) ) {
+                status_header( 404 );
+                header( 'Content-Type: text/plain; charset=utf-8' );
+                echo "# No business profile configured.\n# Set up AI Discovery in the Dsquared Hub Connector settings.";
+                exit;
+            }
+        }
+
+        status_header( 200 );
+        header( 'Content-Type: text/plain; charset=utf-8' );
+        header( 'X-Robots-Tag: noindex' );
+        header( 'Cache-Control: public, max-age=3600' );
+        if ( $is_full ) {
+            echo $this->generate_llms_full( $profile );
+        } else {
+            echo $this->generate_llms_summary( $profile );
+        }
+        exit;
     }
 
     /* ─── Rewrite Rules ─── */
