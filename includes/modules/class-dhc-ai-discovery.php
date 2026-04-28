@@ -68,6 +68,51 @@ class DHC_AI_Discovery {
      * If the path matches /llms.txt or /llms-full.txt we serve the
      * file content and exit — no further WP processing.
      */
+    /**
+     * Write llms.txt and llms-full.txt as physical files in the WP root.
+     *
+     * Some hosts (including ewmacdowellroofing.com) ship an nginx
+     * config with `location ~* \.txt$ { try_files $uri =404; }` which
+     * serves .txt files only from disk and NEVER proxies to PHP. In
+     * that environment our parse_request / template_redirect handlers
+     * never run for /llms.txt — nginx returns its own 404 page before
+     * WordPress sees the request.
+     *
+     * Writing the files to ABSPATH satisfies nginx's try_files lookup
+     * and works regardless of host config. We regenerate them whenever
+     * the business profile is saved.
+     *
+     * Returns array of written file paths or WP_Error on failure.
+     */
+    public function regenerate_static_files( $profile = null ) {
+        $written = array();
+        if ( ! $profile ) {
+            $profile = get_option( 'dhc_business_profile', array() );
+            if ( empty( $profile ) ) $profile = $this->build_fallback_profile();
+        }
+        if ( empty( $profile['business_name'] ) && empty( $profile['description'] ) ) {
+            return new WP_Error( 'empty_profile', 'No business profile to write.' );
+        }
+
+        $files = array(
+            ABSPATH . 'llms.txt'      => $this->generate_llms_summary( $profile ),
+            ABSPATH . 'llms-full.txt' => $this->generate_llms_full( $profile ),
+        );
+
+        foreach ( $files as $path => $content ) {
+            $ok = @file_put_contents( $path, $content );
+            if ( $ok !== false ) {
+                $written[] = $path;
+                @chmod( $path, 0644 );
+            }
+        }
+
+        if ( empty( $written ) ) {
+            return new WP_Error( 'write_failed', 'Could not write to ABSPATH. Check WP-root write permissions.' );
+        }
+        return $written;
+    }
+
     public function maybe_serve_llms_txt_early( $wp ) {
         if ( ! isset( $_SERVER['REQUEST_URI'] ) ) return;
         $raw_uri = (string) $_SERVER['REQUEST_URI'];
@@ -734,6 +779,20 @@ class DHC_AI_Discovery {
         // Save to both option names for compatibility
         update_option( 'dhc_business_profile', $profile );
         update_option( 'dhc_ai_business_profile', $profile );
+
+        // Write physical llms.txt + llms-full.txt files in WP root.
+        // This is the ONLY reliable way to serve these on hosts whose
+        // nginx config short-circuits .txt requests with a try_files
+        // =404 directive (which is most common WordPress nginx setups).
+        // The dynamic handlers below stay as a fallback for hosts that
+        // do route .txt to PHP.
+        $static_result = $this->regenerate_static_files( $profile );
+        $static_files = is_wp_error( $static_result ) ? array() : $static_result;
+        if ( is_wp_error( $static_result ) ) {
+            $this->log_activity( 'Static file write failed: ' . $static_result->get_error_message() );
+        } else {
+            $this->log_activity( 'Static llms.txt files written: ' . implode( ', ', $static_files ) );
+        }
 
         // Flush rewrite rules so llms.txt works
         flush_rewrite_rules();

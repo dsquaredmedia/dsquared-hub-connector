@@ -381,7 +381,7 @@ class DHC_Admin {
                                 <?php printf(
                                     /* translators: %s = link to Content AI setup */
                                     esc_html__( 'Complete your Content AI brand setup in the Hub to auto-populate all fields below. Go to %s to set up your business name, services, locations, and more.', 'dsquared-hub-connector' ),
-                                    '<a href="https://hub.dsquaredmedia.net/content-ai" target="_blank">' . esc_html__( 'Hub &rarr; Content AI &rarr; Brand Setup', 'dsquared-hub-connector' ) . '</a>'
+                                    '<a href="https://hub.dsquaredmedia.net/#content-intel" target="_blank">' . esc_html__( 'Hub &rarr; Content AI &rarr; Brand Setup', 'dsquared-hub-connector' ) . '</a>'
                                 ); ?>
                             </div>
                         </div>
